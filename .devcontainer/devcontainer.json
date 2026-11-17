@@ -1,0 +1,52 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+  "name": "Python 3",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  // Docker and Docker Compose, to build the lab's image and run its Spark cluster.
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // The Spark master's web UI, JupyterLab and the driver's Spark UI.
+  "forwardPorts": [8080, 8888, 4040],
+  "portsAttributes": {
+    "8080": { "label": "Spark, maître" },
+    "8888": { "label": "JupyterLab" },
+    "4040": { "label": "Spark, application" }
+  },
+  // Configure tool-specific properties.
+  "customizations": {
+    // Configure properties specific to VS Code.
+    "vscode": {
+      // Set *default* container specific settings.json values on container create.
+      "settings": {
+        "workbench.iconTheme": "vscode-icons",
+        "vsicons.dontShowNewVersionMessage": true,
+        "editor.rulers": [88],
+        "[python]": {
+          "editor.tabSize": 4,
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          },
+          "editor.formatOnSave": true
+        }
+      },
+      "extensions": [
+        "be5invis.toml",
+        "charliermarsh.ruff",
+        "meta.pyrefly",
+        "MS-CEINTL.vscode-language-pack-fr",
+        "ms-python.python",
+        "ms-vsliveshare.vsliveshare",
+        "vscode-icons-team.vscode-icons"
+      ]
+    }
+  }
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
+}
