@@ -11,12 +11,13 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  // The Spark master's web UI, JupyterLab and the driver's Spark UI.
-  "forwardPorts": [8080, 8888, 4040],
+  // The Spark master's web UI, JupyterLab, the driver's Spark UI and the history server.
+  "forwardPorts": [8080, 8888, 4040, 18080],
   "portsAttributes": {
     "8080": { "label": "Spark, maître" },
     "8888": { "label": "JupyterLab" },
-    "4040": { "label": "Spark, application" }
+    "4040": { "label": "Spark, application" },
+    "18080": { "label": "Spark, historique" }
   },
   // Configure tool-specific properties.
   "customizations": {
