@@ -1,0 +1,31 @@
+x-spark: &spark
+  build:
+    context: .
+    args: { UID_HOTE: "${UID_HOTE:-1000}" }
+  image: spark-avis
+  volumes: ["./donnees:/donnees", "evenements:/evenements"]
+
+services:
+  maitre:
+    <<: *spark
+    command: spark-class org.apache.spark.deploy.master.Master
+    ports: ["8080:8080"]
+  travailleur:
+    <<: *spark
+    command: spark-class org.apache.spark.deploy.worker.Worker spark://maitre:7077
+    environment: [SPARK_WORKER_CORES=1, SPARK_WORKER_MEMORY=1g]
+    deploy: { replicas: 2 }
+    depends_on: [maitre]
+  historique:
+    <<: *spark
+    command: spark-class org.apache.spark.deploy.history.HistoryServer
+    ports: ["18080:18080"]
+  jupyter:
+    <<: *spark
+    command: jupyter lab --ip 0.0.0.0 --notebook-dir /carnets
+    ports: ["8888:8888", "4040:4040"]
+    volumes: ["./donnees:/donnees", "evenements:/evenements", "./carnets:/carnets"]
+    depends_on: [maitre]
+
+volumes:
+  evenements:
