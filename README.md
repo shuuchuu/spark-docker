@@ -99,7 +99,7 @@ Le conteneur tourne sous l'utilisateur `spark`, d'uid 185, pas sous `root`. La s
 
 Lancez le job `jobs/notes_par_affection.py` avec `spark-submit`, dans un conteneur de la même image, sur le fichier des avis&nbsp;: le conteneur ne voit pas les fichiers de l'hôte, montez-y les dossiers `donnees/` et `jobs/` (ce dernier en lecture seule). Le job écrit son résultat dans `donnees/notes`.
 
-Le tableau s'affiche, puis le job échoue&nbsp;: pourquoi&nbsp;? Comparez l'uid du conteneur et le propriétaire de `donnees/` (`ls -ln`).
+Le tableau s'affiche, puis le job échoue&nbsp;: pourquoi&nbsp;? Comparez l'uid du conteneur et le propriétaire de `donnees/` (`ls -lnd`).
 
 **Documentation utile**
 
@@ -114,7 +114,7 @@ Le tableau s'affiche, puis le job échoue&nbsp;: pourquoi&nbsp;? Comparez l'uid 
 ```console
 docker run --rm -v "$PWD/donnees:/donnees" -v "$PWD/jobs:/jobs:ro" spark:4.3.0-python3 \
   /opt/spark/bin/spark-submit /jobs/notes_par_affection.py ... ...
-ls -ln donnees
+ls -lnd donnees
 ```
 
 </details>
@@ -143,8 +143,8 @@ $ docker run --rm -v "$PWD/donnees:/donnees" -v "$PWD/jobs:/jobs:ro" spark:4.3.0
 only showing top 10 rows
 ...
 java.io.IOException: Mkdirs failed to create file:/donnees/notes/_temporary/0/...
-$ ls -ln donnees
--rw-r--r-- 1 1000 1000 84289175 ... drugsComTrain_raw.tsv
+$ ls -lnd donnees
+drwxr-xr-x 2 1000 1000 4096 ... donnees
 ```
 
 (`Bipolar Disorde` est tronqué dans les données elles-mêmes.) La lecture marche, l'écriture échoue&nbsp;: un dossier monté garde ses propriétaires et ses droits, exprimés en uid. `donnees/` appartient à l'uid 1000, le vôtre (celui de `vscode` dans un Codespace), et le conteneur tourne sous l'uid 185, qui n'a pas le droit d'y écrire. Docker Desktop, sur macOS et Windows, partage les dossiers autrement et peut ne pas montrer l'erreur.
@@ -155,16 +155,16 @@ Lancer le conteneur sous votre uid (`--user "$(id -u):$(id -g)"`) ne suffit pas&
 
 ## Une image à nous
 
-Créez ce `Dockerfile`, celui des diapositives, pour une image `spark-avis`&nbsp;: il donne à l'utilisateur `spark` l'uid de l'hôte, passé à la construction par l'argument `UID_HOTE` (1000 par défaut), crée `/opt/spark/work`, où un travailleur Spark écrit ses fichiers, et le lui donne, comme `/opt/spark/work-dir`, le dossier de travail de l'image, installe pandas et PyArrow à des versions fixées, met `/opt/spark/bin` dans le `PATH`, puis revient à l'utilisateur `spark` et copie le dossier `jobs/` dans `/jobs`.
+Créez ce `Dockerfile`, celui des diapositives, pour une image `spark-avis`&nbsp;: il installe pandas et PyArrow à des versions fixées, donne à l'utilisateur `spark` l'uid de l'hôte, passé à la construction par l'argument `UID_HOTE` (1000 par défaut), crée `/opt/spark/work`, où un travailleur Spark écrit ses fichiers, et le lui donne, comme `/opt/spark/work-dir`, le dossier de travail de l'image, met `/opt/spark/bin` dans le `PATH`, puis revient à l'utilisateur `spark` et copie le dossier `jobs/` dans `/jobs`.
 
 ```dockerfile
 FROM spark:4.3.0-python3
-ARG UID_HOTE=1000
 USER root
+RUN pip install --no-cache-dir pandas==2.3.3 pyarrow==25.0.1
+ARG UID_HOTE=1000
 RUN usermod --uid "$UID_HOTE" spark \
   && mkdir /opt/spark/work \
   && chown spark /opt/spark/work /opt/spark/work-dir
-RUN pip install --no-cache-dir pandas==2.3.3 pyarrow==25.0.1
 ENV PATH="/opt/spark/bin:$PATH"
 USER spark
 COPY jobs /jobs
@@ -200,11 +200,12 @@ docker run -it --rm spark-avis jupyter lab --ip 0.0.0.0
 ```
 
 ```dockerfile
+RUN pip install --no-cache-dir \
+  ... pandas==2.3.3 pyarrow==25.0.1
+ARG UID_HOTE=1000
 RUN usermod --uid "$UID_HOTE" --home ... spark \
   && mkdir ... /opt/spark/work \
   && chown spark ... /opt/spark/work /opt/spark/work-dir
-RUN pip install --no-cache-dir \
-  ... pandas==2.3.3 pyarrow==25.0.1
 ENV PATH="/opt/spark/bin:$PATH" \
   PYTHONPATH="..."
 ```
@@ -232,7 +233,7 @@ $ ls -ln donnees/notes
 
 Le job écrit cette fois son résultat, sous votre uid&nbsp;: les fichiers vous appartiennent sur l'hôte. Le nom de l'argument n'est pas `UID`&nbsp;: Bash réserve cette variable, en lecture seule.
 
-Après une modification du job, Docker ne refait que la dernière étape, `COPY jobs /jobs`&nbsp;: les précédentes n'ont pas changé, il reprend leurs couches de son cache. C'est pourquoi le code se copie en dernier, après l'installation des bibliothèques, qui change rarement. Les versions écrites dans le `Dockerfile`, celle de l'image de Spark comme celles des bibliothèques, font qu'une reconstruction, un mois plus tard ou sur une autre machine, donne la même image.
+Après une modification du job, Docker ne refait que la dernière étape, `COPY jobs /jobs`&nbsp;: les précédentes n'ont pas changé, il reprend leurs couches de son cache. C'est pourquoi le code se copie en dernier, après l'installation des bibliothèques, qui change rarement. L'argument `UID_HOTE` se déclare lui aussi après cette installation&nbsp;: chaque `RUN` qui suit un `ARG` dépend de sa valeur, et une construction avec un autre uid réinstallerait sinon les bibliothèques. Les versions écrites dans le `Dockerfile`, celle de l'image de Spark comme celles des bibliothèques, font qu'une reconstruction, un mois plus tard ou sur une autre machine, donne la même image.
 
 ```console
 $ docker run --rm spark-avis python3 -c "import pyspark"
@@ -254,13 +255,13 @@ JupyterLab installé, `jupyter lab` échoue encore&nbsp;: `PermissionError: [Err
 
 ```dockerfile
 FROM spark:4.3.0-python3
-ARG UID_HOTE=1000
 USER root
+RUN pip install --no-cache-dir \
+  jupyterlab==4.6.6 pandas==2.3.3 pyarrow==25.0.1
+ARG UID_HOTE=1000
 RUN usermod --uid "$UID_HOTE" --home /home/spark spark \
   && mkdir /home/spark /opt/spark/work \
   && chown spark /home/spark /opt/spark/work /opt/spark/work-dir
-RUN pip install --no-cache-dir \
-  jupyterlab==4.6.6 pandas==2.3.3 pyarrow==25.0.1
 ENV PATH="/opt/spark/bin:$PATH" \
   PYTHONPATH="/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.9-src.zip"
 USER spark
@@ -380,9 +381,9 @@ spark-docker-travailleur-2   spark-avis   ...   travailleur   ...
 $ docker compose logs travailleur
 ```
 
-L'interface du maître montre deux travailleurs vivants (*Workers: 2 Alive*), deux cœurs et 2&nbsp;Go de mémoire en tout, et aucune application. Chaque travailleur écrit dans son journal qu'il s'est inscrit auprès du maître (`Successfully registered with master spark://...:7077`). Les liens de l'interface vers les travailleurs pointent vers leurs adresses dans le réseau de Compose, que votre navigateur ne joint pas.
+L'interface du maître montre deux travailleurs vivants (*Workers: 2 Alive*), deux cœurs et 2&nbsp;Go de mémoire en tout, et aucune application. Chaque travailleur écrit dans son journal qu'il s'est inscrit auprès du maître (`Successfully registered with master spark://...:7077`). Les liens de l'interface vers les travailleurs pointent vers leurs adresses dans le réseau de Compose&nbsp;: dans un Codespace, votre navigateur ne les joint pas.
 
-Sans `/opt/spark/work` à lui, un travailleur s'arrête au démarrage&nbsp;: l'image officielle, faite pour Kubernetes, où Spark n'a ni maître ni travailleur, ne crée pas ce dossier.
+Sans `/opt/spark/work` à lui, un travailleur s'arrête au démarrage (`Failed to create directory /opt/spark/work`)&nbsp;: après `usermod --uid`, `spark` n'est plus le propriétaire de `/opt/spark` et ne peut plus y créer `work`, ce que le travailleur fait lui-même sous l'uid 185&nbsp;; le `Dockerfile` le crée et le lui donne.
 
 `spark-defaults.conf`&nbsp;:
 
@@ -396,13 +397,13 @@ Le `Dockerfile` crée `/evenements` et le donne à `spark`, puis copie la config
 
 ```dockerfile
 FROM spark:4.3.0-python3
-ARG UID_HOTE=1000
 USER root
+RUN pip install --no-cache-dir \
+  jupyterlab==4.6.6 pandas==2.3.3 pyarrow==25.0.1
+ARG UID_HOTE=1000
 RUN usermod --uid "$UID_HOTE" --home /home/spark spark \
   && mkdir /home/spark /opt/spark/work /evenements \
   && chown spark /home/spark /opt/spark/work /opt/spark/work-dir /evenements
-RUN pip install --no-cache-dir \
-  jupyterlab==4.6.6 pandas==2.3.3 pyarrow==25.0.1
 ENV PATH="/opt/spark/bin:$PATH" \
   PYTHONPATH="/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.9-src.zip"
 COPY spark-defaults.conf /opt/spark/conf/
