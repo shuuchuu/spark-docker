@@ -3,6 +3,7 @@ x-spark: &spark
     context: .
     args: { UID_HOTE: "${UID_HOTE:-1000}" }
   image: spark-avis
+  pull_policy: build
   volumes: ["./donnees:/donnees", "evenements:/evenements"]
 
 services:
