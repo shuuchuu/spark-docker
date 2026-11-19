@@ -283,7 +283,7 @@ JupyterLab démarre, dans un conteneur qui ne publie pas son port&nbsp;: la dern
 
 ## Un cluster Spark avec Docker Compose
 
-Créez ce `compose.yaml`, celui des diapositives&nbsp;: un cluster Spark *standalone* en deux services de l'image `spark-avis`, qu'il construit, le maître, `maitre`, qui publie son interface web sur le port 8080, et deux travailleurs, `travailleur`, d'un cœur et de 1&nbsp;Go de mémoire chacun, qui s'inscrivent auprès du maître à l'adresse `spark://maitre:7077`. Ce que les services partagent (la construction, l'image, le dossier `donnees/` monté) s'écrit une fois, dans l'extension `x-spark`, qu'une ancre YAML (`&spark`) fusionne dans chaque service (`<<: *spark`). L'argument `UID_HOTE` se lit dans l'environnement&nbsp;: si votre uid n'est pas 1000, faites `export UID_HOTE=$(id -u)` avant de lancer Compose.
+Créez ce `compose.yaml`, celui des diapositives&nbsp;: un cluster Spark *standalone* en deux services de l'image `spark-avis`, qu'il construit, le maître, `maitre`, qui publie son interface web sur le port 8080, et deux travailleurs, `travailleur`, d'un cœur et de 1&nbsp;Go de mémoire chacun, qui s'inscrivent auprès du maître à l'adresse `spark://maitre:7077`. Ce que les services partagent (la construction, l'image, le dossier `donnees/` monté) s'écrit une fois, dans l'extension `x-spark`, qu'une ancre YAML (`&spark`) fusionne dans chaque service (`<<: *spark`). `pull_policy: build` dit à Compose de construire l'image sans chercher d'abord à la télécharger&nbsp;: sans lui, il la demande à Docker Hub, où `spark-avis` n'existe pas, et affiche un avertissement `pull access denied` par service avant de la construire. L'argument `UID_HOTE` se lit dans l'environnement&nbsp;: si votre uid n'est pas 1000, faites `export UID_HOTE=$(id -u)` avant de lancer Compose.
 
 ```yaml
 x-spark: &spark
@@ -291,6 +291,7 @@ x-spark: &spark
     context: .
     args: { UID_HOTE: "${UID_HOTE:-1000}" }
   image: spark-avis
+  pull_policy: build
   volumes: ["./donnees:/donnees"]
 
 services:
@@ -419,6 +420,7 @@ x-spark: &spark
     context: .
     args: { UID_HOTE: "${UID_HOTE:-1000}" }
   image: spark-avis
+  pull_policy: build
   volumes: ["./donnees:/donnees", "evenements:/evenements"]
 
 services:
@@ -602,7 +604,7 @@ $ docker compose down -v
 $ docker compose up -d
 ```
 
-`docker compose down` arrête et supprime les conteneurs et le réseau&nbsp;: ce qu'on n'a écrit que dans un conteneur est perdu. Restent l'image `spark-avis`, que le prochain `up` réutilise, le volume nommé `evenements`, et, sur l'hôte, ce que les dossiers montés ont reçu&nbsp;: `donnees/notes` et les notebooks de `carnets/`. Après un nouveau `up`, l'interface du maître n'a plus aucune application, mais le serveur d'historique les montre toutes, d'après les journaux que le volume a gardés. `docker compose down -v` supprime aussi les volumes nommés du projet&nbsp;: au `up` suivant, l'historique est vide. Les dossiers montés de l'hôte, eux, restent.
+`docker compose down` arrête et supprime les conteneurs et le réseau&nbsp;: ce qu'on n'a écrit que dans un conteneur est perdu. Restent l'image `spark-avis`, que le prochain `up` reconstruit en un instant, chaque étape venant du cache, le volume nommé `evenements`, et, sur l'hôte, ce que les dossiers montés ont reçu&nbsp;: `donnees/notes` et les notebooks de `carnets/`. Après un nouveau `up`, l'interface du maître n'a plus aucune application, mais le serveur d'historique les montre toutes, d'après les journaux que le volume a gardés. `docker compose down -v` supprime aussi les volumes nommés du projet&nbsp;: au `up` suivant, l'historique est vide. Les dossiers montés de l'hôte, eux, restent.
 
 </details>
 
